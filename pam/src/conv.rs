@@ -2,8 +2,8 @@ use libc::{c_char, c_int};
 use std::ffi::{CStr, CString};
 use std::ptr;
 
-use constants::PamResultCode;
 use constants::PamMessageStyle;
+use constants::PamResultCode;
 use items::Item;
 use module::PamResult;
 
@@ -53,7 +53,7 @@ impl<'a> Conv<'a> {
     /// Note that the user experience will depend on how the client implements
     /// these message styles - and not all applications implement all message
     /// styles.
-    pub fn send(&self, style: PamMessageStyle, msg: &str) -> PamResult<Option<&CStr>> {
+    pub fn send(&self, style: PamMessageStyle, msg: &str) -> PamResult<Option<CString>> {
         let mut resp_ptr: *const PamResponse = ptr::null();
         let msg_cstr = CString::new(msg).unwrap();
         let msg = PamMessage {
@@ -62,18 +62,24 @@ impl<'a> Conv<'a> {
         };
 
         let ret = (self.0.conv)(1, &&msg, &mut resp_ptr, self.0.appdata_ptr);
-
-        if PamResultCode::PAM_SUCCESS == ret {
-            // PamResponse.resp is null for styles that don't return user input like PAM_TEXT_INFO
-            let response = unsafe { (*resp_ptr).resp };
-            if response.is_null() {
-                Ok(None)
-            } else {
-                Ok(Some(unsafe { CStr::from_ptr(response) }))
-            }
-        } else {
-            Err(ret)
+        if PamResultCode::PAM_SUCCESS != ret {
+            unsafe { libc::free(resp_ptr as *mut _) };
+            return Err(ret);
         }
+        //else
+        // PamResponse.resp is null for styles that don't return user input like PAM_TEXT_INFO
+        let response = unsafe { (*resp_ptr).resp };
+        let result = if response.is_null() {
+            None
+        } else {
+            let cstr = unsafe { CStr::from_ptr(response) };
+            Some(cstr.to_owned())
+        };
+        if !response.is_null() {
+            unsafe { libc::free(response as *mut _) };
+        }
+        unsafe { libc::free(resp_ptr as *mut _) };
+        Ok(result)
     }
 }
 
