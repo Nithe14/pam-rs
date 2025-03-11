@@ -160,7 +160,7 @@ impl PamHandle {
     /// Panics if the provided item key contains a nul byte
     pub fn set_item_str<T: crate::items::Item>(&mut self, item: T) -> PamResult<()> {
         let res =
-            unsafe { pam_set_item(self, T::type_id(), item.into_raw().cast::<libc::c_void>())};
+            unsafe { pam_set_item(self, T::type_id(), item.into_raw().cast::<libc::c_void>()) };
         if PamResultCode::PAM_SUCCESS == res {
             Ok(())
         } else {
@@ -193,6 +193,7 @@ impl PamHandle {
             None => std::ptr::null(),
         };
         let res = unsafe { pam_get_user(self, &ptr, c_prompt) };
+        let ptr = unsafe { std::ptr::read_volatile(&ptr) };
         if PamResultCode::PAM_SUCCESS == res && !ptr.is_null() {
             let const_ptr = ptr as *const c_char;
             let bytes = unsafe { CStr::from_ptr(const_ptr).to_bytes() };
